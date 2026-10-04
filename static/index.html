@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Cloud Storage — Đám mây lưu trữ cá nhân</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Identity Services (Google OAuth 2.0 Client) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- OVERLAY DRAG & DROP FOR FULL PAGE -->
+    <div id="drag-overlay" class="fixed inset-0 bg-indigo-950/60 z-50 hidden flex-col items-center justify-center text-white backdrop-blur-sm transition-all pointer-events-none">
+        <div class="p-8 border-4 border-dashed border-indigo-400 rounded-3xl bg-slate-900/80 text-center max-w-lg shadow-2xl transform scale-105">
+            <i data-lucide="upload-cloud" class="w-20 h-20 mx-auto mb-4 text-indigo-400 animate-bounce"></i>
+            <h3 class="text-2xl font-bold mb-2">Thả tập tin để tải lên</h3>
+            <p class="text-indigo-200">Tối đa 5 GB/file và 5 GB/lần. Hỗ trợ hiển thị tiến trình chi tiết từng file.</p>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="flex flex-1 h-screen overflow-hidden">
+
+        <!-- MOBILE SIDEBAR BACKDROP -->
+        <div id="mobile-sidebar-backdrop" class="fixed inset-0 bg-slate-900/50 z-30 hidden md:hidden" onclick="toggleMobileSidebar()"></div>
+
+        <!-- SIDEBAR NAVIGATION -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out shadow-sm">
+            <!-- App Brand Logo -->
+            <div class="h-16 px-6 border-b border-slate-100 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+                        <i data-lucide="cloud" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-slate-900 text-lg leading-tight">Cloud Storage</h1>
+                        <span class="text-xs text-slate-400 font-medium">Lưu trữ cá nhân</span>
+                    </div>
+                </div>
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Quick Upload Button -->
+            <div class="p-4">
+                <button id="sidebar-upload-btn" onclick="triggerFileInput()" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 transition-all transform active:scale-95">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <span>Tải tập tin lên</span>
+                </button>
+                <input type="file" id="global-file-input" class="hidden" multiple onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 px-3 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+                <a href="#home" onclick="navTo('home')" id="nav-home" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-indigo-600 bg-indigo-50">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    <span>Home (Dashboard)</span>
+                </a>
+                <a href="#files" onclick="navTo('files')" id="nav-files" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    <i data-lucide="folder" class="w-5 h-5"></i>
+                    <span>All Files</span>
+                </a>
+                <a href="#photos" onclick="navTo('photos')" id="nav-photos" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    <i data-lucide="image" class="w-5 h-5"></i>
+                    <span>Photos</span>
+                </a>
+                <a href="#documents" onclick="navTo('documents')" id="nav-documents" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    <i data-lucide="file-text" class="w-5 h-5"></i>
+                    <span>Documents</span>
+                </a>
+                <a href="#starred" onclick="navTo('starred')" id="nav-starred" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    <i data-lucide="star" class="w-5 h-5"></i>
+                    <span>Starred</span>
+                </a>
+                <a href="#trash" onclick="navTo('trash')" id="nav-trash" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    <span>Trash</span>
+                </a>
+                <a href="#settings" onclick="navTo('settings')" id="nav-settings" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <!-- Sidebar Storage Widget -->
+            <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Storage</span>
+                    <span id="sidebar-plan-tag" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">FREE</span>
+                </div>
+                <div class="mb-1 text-sm font-bold text-slate-800" id="sidebar-storage-text">0 B / 5 GB</div>
+                <div class="w-full bg-slate-200 rounded-full h-2 mb-2 overflow-hidden">
+                    <div id="sidebar-storage-bar" class="bg-indigo-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="text-xs text-slate-400 mb-3" id="sidebar-remaining-text">5.0 GB remaining</div>
+                <button onclick="openUpgradeModal()" class="w-full text-center py-2 px-3 bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-600 hover:text-indigo-700 text-xs font-semibold rounded-lg shadow-sm transition-all">
+                    Nâng cấp dung lượng
+                </button>
+            </div>
+        </aside>
+
+        <!-- CONTENT AREA -->
+        <div class="flex-1 flex flex-col md:pl-64 overflow-hidden">
+            
+            <!-- HEADER BAR -->
+            <header class="h-16 border-b border-slate-200 bg-white px-4 md:px-8 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3 flex-1 max-w-xl">
+                    <button onclick="toggleMobileSidebar()" class="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+                    <!-- Search Box -->
+                    <div class="relative w-full">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="search-input" onkeyup="handleSearch(event)" placeholder="Tìm kiếm tập tin, ảnh, tài liệu..." class="w-full pl-10 pr-4 py-2 bg-slate-100 focus:bg-white text-sm text-slate-800 rounded-xl border border-transparent focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-all">
+                    </div>
+                </div>
+
+                <!-- User Profile & Account Controls -->
+                <div class="flex items-center gap-3">
+                    <button onclick="openAuthModal()" class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-700 transition-all">
+                        <img id="user-avatar" src="https://lh3.googleusercontent.com/a/default-user" class="w-7 h-7 rounded-full bg-slate-200 object-cover" alt="User">
+                        <span id="user-name-display" class="hidden sm:inline text-xs font-semibold">Tài khoản Google</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- MAIN DYNAMIC SECTION CONTAINER -->
+            <main class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                
+                <!-- 1. HOME DASHBOARD VIEW -->
+                <section id="sec-home" class="space-y-8">
+                    
+                    <!-- OVERDUE 3 DAYS LOCKED RED BANNER -->
+                    <div id="overdue-locked-banner" class="hidden p-5 rounded-3xl bg-rose-50 border-2 border-rose-300 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                        <div class="flex items-start gap-4">
+                            <div class="p-3 bg-rose-500 text-white rounded-2xl shrink-0">
+                                <i data-lucide="lock" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-extrabold text-rose-950 text-base" id="locked-banner-title">TÀI KHOẢN ĐÃ BỊ KHÓA CHỨC NĂNG (QUÁ HẠN 3 NGÀY)</h4>
+                                <p class="text-xs text-rose-700 mt-1 leading-relaxed" id="locked-banner-desc">
+                                    Tài khoản đã quá hạn thanh toán 3 ngày. Tất cả tính năng Tải lên, Tạo folder, Sửa & Xóa file đã bị tạm dừng. 
+                                    Bạn có thể <b>Tải toàn bộ dữ liệu (Zip)</b> về máy hoặc nhấn <b>Thanh toán ngay</b> để khôi phục hoạt động bình thường.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 shrink-0">
+                            <button onclick="exportAllDataZip()" class="px-4 py-2.5 bg-white border border-rose-300 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5">
+                                <i data-lucide="file-archive" class="w-4 h-4"></i>
+                                <span>Tải toàn bộ dữ liệu (Zip)</span>
+                            </button>
+                            <button onclick="payRenewal()" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-200 transition-all flex items-center gap-1.5">
+                                <i data-lucide="credit-card" class="w-4 h-4"></i>
+                                <span>Thanh toán mở khóa</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- DUE WARNING AMBER BANNER -->
+                    <div id="due-warning-banner" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-amber-100 text-amber-700 rounded-xl">
+                                <i data-lucide="bell" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-amber-900 text-xs" id="due-warning-title">Nhắc nhở thanh toán gia hạn</h4>
+                                <p class="text-[11px] text-amber-700" id="due-warning-desc">Gói dịch vụ đã đến hạn gia hạn. Vui lòng thanh toán để duy trì bộ nhớ.</p>
+                            </div>
+                        </div>
+                        <button onclick="payRenewal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm shrink-0">
+                            Thanh toán gia hạn
+                        </button>
+                    </div>
+
+                    <!-- Near Full Warning Banner -->
+                    <div id="storage-warning-banner" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-4">
+                        <div class="p-2 bg-amber-100 text-amber-700 rounded-xl">
+                            <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="font-bold text-amber-900 text-sm" id="warning-title">Cảnh báo: Dung lượng sắp đầy!</h4>
+                            <p class="text-xs text-amber-700 mt-0.5" id="warning-desc">Dung lượng sử dụng đã vượt quá 80%. Hãy nâng cấp gói để tiếp tục tải thêm tập tin.</p>
+                        </div>
+                        <button onclick="openUpgradeModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm">
+                            Nâng cấp ngay
+                        </button>
+                    </div>
+
+                    <!-- Dashboard Storage Card -->
+                    <div class="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-sm space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <span class="text-xs font-bold text-indigo-600 tracking-wider uppercase">Dung lượng bộ nhớ</span>
+                                <h2 class="text-3xl font-extrabold text-slate-900 mt-1" id="dash-storage-usage">0 B / 5 GB</h2>
+                                <p class="text-sm text-slate-500 mt-1" id="dash-storage-remaining">████████████░░░░ (5.0 GB remaining)</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button onclick="openUpgradeModal()" class="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-semibold text-sm px-6 py-3 rounded-2xl shadow-lg shadow-indigo-100 transition-all transform active:scale-95 flex items-center gap-2">
+                                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                    <span>Nâng cấp Gói Dung lượng</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="w-full bg-slate-100 rounded-2xl h-4 overflow-hidden flex">
+                            <div id="bar-img" class="bg-blue-500 h-full transition-all duration-500" style="width: 0%" title="Images"></div>
+                            <div id="bar-doc" class="bg-emerald-500 h-full transition-all duration-500" style="width: 0%" title="Documents"></div>
+                            <div id="bar-vid" class="bg-purple-500 h-full transition-all duration-500" style="width: 0%" title="Videos"></div>
+                            <div id="bar-oth" class="bg-amber-500 h-full transition-all duration-500" style="width: 0%" title="Others"></div>
+                        </div>
+
+                        <!-- Category Breakdown Cards -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div class="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center">
+                                    <i data-lucide="image" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 font-medium">Images</div>
+                                    <div class="text-base font-bold text-slate-900" id="cat-size-img">0 B</div>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center">
+                                    <i data-lucide="file-text" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 font-medium">Documents</div>
+                                    <div class="text-base font-bold text-slate-900" id="cat-size-doc">0 B</div>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-purple-500 text-white flex items-center justify-center">
+                                    <i data-lucide="video" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 font-medium">Videos</div>
+                                    <div class="text-base font-bold text-slate-900" id="cat-size-vid">0 B</div>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-amber-50/50 border border-amber-100 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center">
+                                    <i data-lucide="file" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 font-medium">Others</div>
+                                    <div class="text-base font-bold text-slate-900" id="cat-size-oth">0 B</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Largest Files Section -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                            <i data-lucide="hard-drive" class="w-5 h-5 text-indigo-600"></i>
+                            <span>Tập tin lớn nhất (Largest Files)</span>
+                        </h3>
+                        <div id="largest-files-list" class="bg-white rounded-3xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
+                            <div class="p-8 text-center text-slate-400 text-sm">Chưa có tập tin nào.</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Files Grid -->
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                <i data-lucide="clock" class="w-5 h-5 text-indigo-600"></i>
+                                <span>Tập tin gần đây (Recent Files)</span>
+                            </h3>
+                            <button onclick="navTo('files')" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Xem tất cả →</button>
+                        </div>
+                        <div id="recent-files-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="col-span-full p-8 bg-white rounded-3xl border border-slate-200 text-center text-slate-400 text-sm">Chưa có tập tin nào được tải lên.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. ALL FILES & CATEGORY EXPLORER VIEW -->
+                <section id="sec-explorer" class="hidden space-y-6">
+                    <!-- Top Toolbar -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 id="explorer-title" class="text-2xl font-bold text-slate-900">All Files</h2>
+                            <!-- Folder Breadcrumbs -->
+                            <div id="breadcrumbs" class="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                                <span class="cursor-pointer hover:text-indigo-600 font-semibold" onclick="openFolder('root')">Root</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button id="explorer-new-folder-btn" onclick="openCreateFolderModal()" class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 font-semibold text-sm text-slate-700 rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                                <i data-lucide="folder-plus" class="w-4 h-4 text-indigo-600"></i>
+                                <span>Tạo Folder</span>
+                            </button>
+                            <button id="explorer-upload-btn" onclick="triggerFileInput()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-semibold text-sm text-white rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                                <i data-lucide="upload" class="w-4 h-4"></i>
+                                <span>Upload File</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Folders Grid -->
+                    <div id="folders-section" class="space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Folders</h4>
+                        <div id="folders-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <!-- Folders rendered dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Files View Header & View Toggle -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Files</h4>
+                            <div class="flex items-center bg-slate-200/60 p-1 rounded-xl gap-1">
+                                <button onclick="setViewMode('grid')" id="btn-view-grid" class="p-1.5 rounded-lg bg-white shadow-sm text-slate-700">
+                                    <i data-lucide="grid" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="setViewMode('list')" id="btn-view-list" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-700">
+                                    <i data-lucide="list" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Files Container (Grid or List) -->
+                        <div id="files-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Files rendered dynamically -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. TRASH VIEW -->
+                <section id="sec-trash" class="hidden space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-900">Trash (Thùng rác)</h2>
+                            <p class="text-xs text-slate-500 mt-1">File trong thùng rác có thể được khôi phục hoặc xóa vĩnh viễn.</p>
+                        </div>
+                        <button onclick="emptyTrashConfirm()" class="px-4 py-2.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-600 font-semibold text-sm rounded-xl flex items-center gap-2 transition-all">
+                            <i data-lucide="trash" class="w-4 h-4"></i>
+                            <span>Dọn sạch thùng rác</span>
+                        </button>
+                    </div>
+
+                    <div id="trash-files-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <!-- Trashed files rendered dynamically -->
+                    </div>
+                </section>
+
+                <!-- 4. SETTINGS VIEW -->
+                <section id="sec-settings" class="hidden max-w-3xl space-y-8">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">Cài đặt hệ thống</h2>
+                        <p class="text-xs text-slate-500 mt-1">Quản lý tài khoản Google, chu kỳ thanh toán & giả lập quá hạn.</p>
+                    </div>
+
+                    <!-- User Account Card -->
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-base border-b border-slate-100 pb-3">Tài khoản Google đang kết nối</h3>
+                        <div class="flex items-center gap-4">
+                            <img id="settings-avatar" src="https://lh3.googleusercontent.com/a/default-user" class="w-14 h-14 rounded-2xl bg-slate-100 object-cover border border-slate-200">
+                            <div>
+                                <h4 class="font-bold text-slate-900 text-base" id="settings-name">Tài khoản Google</h4>
+                                <p class="text-xs text-slate-500" id="settings-email">user@gmail.com</p>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <span class="inline-block text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-700 uppercase" id="settings-plan">Gói: FREE (5 GB)</span>
+                                    <span class="inline-block text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 uppercase" id="settings-billing-status">Active</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pt-2 flex flex-wrap gap-3">
+                            <button onclick="openAuthModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all">
+                                Chuyển tài khoản Google
+                            </button>
+                            <button onclick="payRenewal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-all">
+                                Thanh toán gia hạn
+                            </button>
+                            <button onclick="exportAllDataZip()" class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-xl transition-all">
+                                Tải toàn bộ dữ liệu (Zip)
+                            </button>
+                            <button onclick="handleLogout()" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-xl transition-all">
+                                Đăng xuất
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dev Billing Expiry Date Simulator -->
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+                            <i data-lucide="flask-conical" class="w-5 h-5 text-indigo-600"></i>
+                            <span>Giả lập Chu kỳ Thanh toán & Quá hạn (Dev Testing)</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            Thử nghiệm các trạng thái nhắc nhở thanh toán, khóa tài khoản quá hạn 3 ngày (cho phép tải Zip), và xóa tài khoản quá hạn 7 ngày.
+                        </p>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <button onclick="setDevBillingDate(30)" class="p-3 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-left transition-all">
+                                <div class="text-xs font-bold text-slate-900">Bình thường</div>
+                                <div class="text-[10px] text-slate-500 mt-1">+30 ngày tới</div>
+                            </button>
+                            <button onclick="setDevBillingDate(0)" class="p-3 rounded-2xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50 text-left transition-all">
+                                <div class="text-xs font-bold text-amber-700">Đến hạn hôm nay</div>
+                                <div class="text-[10px] text-slate-500 mt-1">Banner nhắc gia hạn</div>
+                            </button>
+                            <button onclick="setDevBillingDate(-3)" class="p-3 rounded-2xl border border-slate-200 hover:border-rose-500 hover:bg-rose-50 text-left transition-all">
+                                <div class="text-xs font-bold text-rose-600">Quá hạn 3 ngày</div>
+                                <div class="text-[10px] text-slate-500 mt-1">Khóa & Tải Zip</div>
+                            </button>
+                            <button onclick="setDevBillingDate(-7)" class="p-3 rounded-2xl border border-slate-200 hover:border-rose-800 hover:bg-rose-100 text-left transition-all">
+                                <div class="text-xs font-bold text-rose-900">Quá hạn 7 ngày</div>
+                                <div class="text-[10px] text-slate-500 mt-1">Xóa vĩnh viễn user</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Google Client ID Configuration -->
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-base border-b border-slate-100 pb-3">Cấu hình Google OAuth Client ID</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            Nhập Google Client ID (từ Google Cloud Console) để kích hoạt đăng nhập trực tiếp qua popup Google Sign-In chính thức.
+                        </p>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Google Client ID</label>
+                            <input type="text" id="google-client-id-input" placeholder="e.g. 1234567890-abcdef.apps.googleusercontent.com" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white">
+                        </div>
+                        <button onclick="saveGoogleClientId()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm">
+                            Lưu Google Client ID
+                        </button>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL: GOOGLE AUTH & DEMO ACCOUNT SWITCHER -->
+    <div id="auth-modal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 relative border border-slate-100">
+            <button onclick="closeAuthModal()" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center">
+                    <i data-lucide="log-in" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-900">Đăng nhập Google Account</h3>
+                <p class="text-xs text-slate-500">Mỗi tài khoản lưu trữ dữ liệu riêng biệt trên cơ sở dữ liệu và file storage.</p>
+            </div>
+
+            <!-- Real Google OAuth Button Mount Point -->
+            <div id="google-signin-btn-container" class="flex justify-center my-4"></div>
+
+            <div class="relative flex items-center justify-center my-4">
+                <div class="border-t border-slate-200 w-full"></div>
+                <span class="bg-white px-3 text-[11px] font-semibold text-slate-400 uppercase">Hoặc chuyển nhanh tài khoản</span>
+            </div>
+
+            <!-- Demo Account Switcher Cards -->
+            <div class="space-y-3">
+                <button onclick="loginAsDemo('1001', 'nguyenvana@gmail.com', 'Nguyễn Văn A', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100')" class="w-full p-3 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 flex items-center gap-3 transition-all text-left">
+                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" class="w-10 h-10 rounded-full object-cover">
+                    <div>
+                        <h5 class="text-xs font-bold text-slate-900">Nguyễn Văn A (User 1)</h5>
+                        <span class="text-[11px] text-slate-500">nguyenvana@gmail.com</span>
+                    </div>
+                </button>
+                <button onclick="loginAsDemo('1002', 'tranvanb@gmail.com', 'Trần Văn B', 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100')" class="w-full p-3 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 flex items-center gap-3 transition-all text-left">
+                    <img src="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100" class="w-10 h-10 rounded-full object-cover">
+                    <div>
+                        <h5 class="text-xs font-bold text-slate-900">Trần Văn B (User 2)</h5>
+                        <span class="text-[11px] text-slate-500">tranvanb@gmail.com</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: UPGRADE STORAGE PLAN -->
+    <div id="upgrade-modal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-3xl w-full p-8 shadow-2xl space-y-6 relative border border-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <button onclick="closeUpgradeModal()" class="absolute right-6 top-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="text-center max-w-md mx-auto space-y-2">
+                <span class="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">Storage Plans</span>
+                <h3 class="text-2xl font-bold text-slate-900">Nâng cấp dung lượng lưu trữ</h3>
+                <p class="text-xs text-slate-500">Mô phỏng nâng cấp hạn mức bộ nhớ đám mây tức thì.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+                <!-- Free Plan Card -->
+                <div class="p-5 rounded-3xl border border-slate-200 hover:border-indigo-300 flex flex-col justify-between space-y-4">
+                    <div>
+                        <h4 class="font-bold text-slate-900 text-lg">Free</h4>
+                        <div class="text-2xl font-extrabold text-slate-900 my-2">5 GB</div>
+                        <p class="text-xs text-slate-500">Miễn phí trọn đời cho mọi tài khoản Google.</p>
+                    </div>
+                    <button onclick="selectPlan('free')" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-all">
+                        Gói hiện tại
+                    </button>
+                </div>
+
+                <!-- Basic Plan Card -->
+                <div class="p-5 rounded-3xl border border-slate-200 hover:border-indigo-300 flex flex-col justify-between space-y-4">
+                    <div>
+                        <h4 class="font-bold text-slate-900 text-lg">Basic</h4>
+                        <div class="text-2xl font-extrabold text-indigo-600 my-2">20 GB</div>
+                        <p class="text-xs text-slate-500">Phù hợp nhu cầu lưu trữ ảnh và tài liệu cá nhân.</p>
+                    </div>
+                    <button onclick="selectPlan('basic')" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all">
+                        Nâng cấp Basic
+                    </button>
+                </div>
+
+                <!-- Plus Plan Card -->
+                <div class="p-5 rounded-3xl border-2 border-indigo-600 bg-indigo-50/30 flex flex-col justify-between space-y-4 relative">
+                    <span class="absolute -top-3 right-4 bg-indigo-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">Phổ biến</span>
+                    <div>
+                        <h4 class="font-bold text-slate-900 text-lg">Plus</h4>
+                        <div class="text-2xl font-extrabold text-indigo-600 my-2">50 GB</div>
+                        <p class="text-xs text-slate-500">Thải mái lưu trữ Video HD và bộ sưu tập ảnh lớn.</p>
+                    </div>
+                    <button onclick="selectPlan('plus')" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all">
+                        Nâng cấp Plus
+                    </button>
+                </div>
+
+                <!-- Pro Plan Card -->
+                <div class="p-5 rounded-3xl border border-slate-200 hover:border-indigo-300 flex flex-col justify-between space-y-4">
+                    <div>
+                        <h4 class="font-bold text-slate-900 text-lg">Pro</h4>
+                        <div class="text-2xl font-extrabold text-slate-900 my-2">100 GB</div>
+                        <p class="text-xs text-slate-500">Dung lượng cực khủng cho chuyên gia & sáng tạo nội dung.</p>
+                    </div>
+                    <button onclick="selectPlan('pro')" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-md transition-all">
+                        Nâng cấp Pro
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREATE FOLDER -->
+    <div id="folder-modal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 relative border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-900">Tạo thư mục mới</h3>
+            <input type="text" id="new-folder-name" placeholder="Tên thư mục..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white">
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeCreateFolderModal()" class="px-4 py-2 text-slate-600 text-xs font-semibold hover:bg-slate-100 rounded-xl">Hủy</button>
+                <button onclick="submitCreateFolder()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm">Tạo ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: RENAME FILE / FOLDER -->
+    <div id="rename-modal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 relative border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-900">Đổi tên</h3>
+            <input type="text" id="rename-input" placeholder="Tên mới..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white">
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeRenameModal()" class="px-4 py-2 text-slate-600 text-xs font-semibold hover:bg-slate-100 rounded-xl">Hủy</button>
+                <button onclick="submitRename()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MOVE FILE TO FOLDER -->
+    <div id="move-modal" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 relative border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-900">Di chuyển tập tin vào Folder</h3>
+            <div class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar" id="move-folder-options">
+                <!-- Folder options rendered dynamically -->
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button onclick="closeMoveModal()" class="px-4 py-2 text-slate-600 text-xs font-semibold hover:bg-slate-100 rounded-xl">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FILE PREVIEW / LIGHTBOX -->
+    <div id="preview-modal" class="fixed inset-0 bg-slate-950/90 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="relative max-w-4xl w-full max-h-[90vh] flex flex-col bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl">
+            <div class="px-6 py-4 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between">
+                <h4 id="preview-filename" class="font-bold text-white text-sm truncate">Tên file</h4>
+                <div class="flex items-center gap-3">
+                    <a id="preview-download-btn" href="#" download class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Tải xuống</span>
+                    </a>
+                    <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="preview-body" class="flex-1 p-6 flex items-center justify-center overflow-auto custom-scrollbar min-h-[300px]">
+                <!-- Dynamic content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- FLOATING MULTI-FILE UPLOAD PROGRESS CARD WITH PER-FILE PROGRESS BARS -->
+    <div id="upload-progress-card" class="fixed bottom-6 right-6 z-40 w-96 bg-white border border-slate-200 rounded-3xl shadow-2xl p-5 hidden space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <span class="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="upload-cloud" class="w-4 h-4 text-indigo-600"></i>
+                <span id="upload-progress-title">Đang tải tập tin lên...</span>
+            </span>
+            <span id="upload-progress-percent" class="text-xs font-extrabold text-indigo-600">0%</span>
+        </div>
+
+        <!-- Total Batch Progress Bar -->
+        <div>
+            <div class="flex justify-between text-[11px] text-slate-400 font-semibold mb-1">
+                <span>Tổng đợt upload</span>
+                <span id="upload-total-size-text">0 B / 0 B</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div id="upload-progress-bar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Individual Per-File Progress List -->
+        <div class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1" id="upload-per-file-list">
+            <!-- Rendered dynamically per file -->
+        </div>
+
+        <div class="text-[11px] text-slate-500 flex justify-between" id="upload-progress-status">
+            <span>Đang chuẩn bị...</span>
+        </div>
+    </div>
+
+    <!-- MAIN APP SCRIPT -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
